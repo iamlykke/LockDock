@@ -55,9 +55,6 @@ cd LockDock
 Only Xcode Command Line Tools are needed. The whole app is a single file:
 [`Sources/main.swift`](Sources/main.swift).
 
-> After each rebuild macOS may revoke Accessibility access (the ad-hoc signature changes).
-> Remove LockDock from the Accessibility list and add it again.
-
 ---
 
 ## Русский

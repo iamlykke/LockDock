@@ -86,15 +86,29 @@ final class DockGuard {
     }
 }
 
+// TEMP diagnostics: ~/Library/Logs/LockDock.log
+private let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/LockDock.log")
+func debugLog(_ message: String) {
+    let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(message)\n"
+    if let handle = try? FileHandle(forWritingTo: logURL) {
+        handle.seekToEndOfFile()
+        handle.write(line.data(using: .utf8)!)
+        try? handle.close()
+    } else {
+        try? line.write(to: logURL, atomically: true, encoding: .utf8)
+    }
+}
+
 private let tapCallback: CGEventTapCallBack = { _, type, event, _ in
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        debugLog("tap disabled (type \(type.rawValue)), re-enabling")
         if let tap = DockGuard.shared.tap { CGEvent.tapEnable(tap: tap, enable: true) }
         return Unmanaged.passUnretained(event)
     }
+    // Only the event is rewritten. CGWarpMouseCursorPosition is avoided on purpose:
+    // each warp suppresses mouse input for a moment, which froze the cursor along the edge.
     if let p = DockGuard.shared.clamp(event.location) {
         event.location = p
-        CGWarpMouseCursorPosition(p)
-        CGAssociateMouseAndMouseCursorPosition(1)
     }
     return Unmanaged.passUnretained(event)
 }
@@ -166,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
+        debugLog("launch: trusted=\(AXIsProcessTrusted()) locked=\(String(describing: DockGuard.shared.lockedID)) uuid=\(DockGuard.shared.lockedUUID ?? "nil") orientation=\(DockGuard.shared.orientation)")
         if !installTap() {
             Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
                 if self?.installTap() == true { timer.invalidate() }
@@ -180,7 +195,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let tap = CGEvent.tapCreate(
             tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: mask, callback: tapCallback, userInfo: nil
-        ) else { return false }
+        ) else { debugLog("tapCreate failed"); return false }
+        debugLog("tap installed")
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)

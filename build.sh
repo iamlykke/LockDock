@@ -17,7 +17,9 @@ for arch in arm64 x86_64; do
     swiftc -O -swift-version 5 -target $arch-apple-macos14.4 Sources/main.swift -o build/obj/LockDock-$arch
 done
 lipo -create build/obj/LockDock-arm64 build/obj/LockDock-x86_64 -output "$BIN"
-codesign --force --sign - "$APP"
+# Ad-hoc signatures default to a cdhash requirement, which changes on every build and
+# silently voids the Accessibility grant. Pin the requirement to the bundle id instead.
+codesign --force --sign - -r='designated => identifier "com.lykke.LockDock"' "$APP"
 echo "Built $APP"
 
 if [[ "$1" == "--release" ]]; then
